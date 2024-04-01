@@ -64,42 +64,35 @@ func SearchPriceHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func SearchPrice() (*Price, error) {
-	url := "https://economia.awesomeapi.com.br/json/last/USD-BRL"
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer cancel()
 
-	req, err := http.Get(url)
-
-	/*
-		Fiz a tentativa de usar o contexto para cancelar a requisição após 200ms, mas não consegui fazer funcionar.
-
-		2024/03/31 22:21:59 http: panic serving [::1]:52115: runtime error: invalid memory address or nil pointer dereference
-		goroutine 19 [running]:
-		net/http.(*conn).serve.func1()
-		        /usr/local/go/src/net/http/server.go:1854 +0xb0
-		panic({0x10492a040, 0x104b4cd40})
-		        /usr/local/go/src/runtime/panic.go:890 +0x258
-		main.SearchPrice()
-	*/
-
-	/*
-		ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
-		defer cancel2()
-		req, err := http.NewRequestWithContext(ctx2, "GET", url, nil)
-	*/
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://economia.awesomeapi.com.br/json/last/USD-BRL", nil)
 
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
-	defer req.Body.Close()
 
-	res, err := io.ReadAll(req.Body)
+	resp, err := http.DefaultClient.Do(req)
+
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
 
 	var price Price
-	err = json.Unmarshal(res, &price)
+	err = json.Unmarshal(body, &price)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -121,10 +114,10 @@ func SearchPrice() (*Price, error) {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx2, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
-	_, err = db.ExecContext(ctx, "INSERT INTO price (bid, code, codein, name, high, low, varBid, pctChange, ask, create_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	_, err = db.ExecContext(ctx2, "INSERT INTO price (bid, code, codein, name, high, low, varBid, pctChange, ask, create_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		price.Usdbrl.Bid,
 		price.Usdbrl.Code,
 		price.Usdbrl.Codein,
